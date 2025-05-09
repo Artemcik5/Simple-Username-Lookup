@@ -5,7 +5,8 @@ This is just a heads up that this tool is very bad, unfinished, and not really g
 
 ## 🎮 How to use 🎮 
 Copy the main.py script or download it, and run it.
-in the output you will see social media that were found, and errors, you can report issues but check if they aren't reported already.
+You will be asked to input a username(s), and if you want to input more than one, seperate them with a "," (comma), dont add spaces.
+In the output you will see social media that were found, and errors, you can report issues but check if they aren't reported already.
 
 ## 😶 The Downsides.. 😶
 Some, well most social media sites use bot protection which is hard to get around, stuff like Instagram for example just straight up wont let you go in the site and it will send you to a login page
