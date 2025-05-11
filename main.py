@@ -1,10 +1,9 @@
-# https://colab.research.google.com/ 
-# ^^ that website allows for testing on google's servers.
-# again this thing sucks, go use Sherlock.
+# https://colab.research.google.com/
+# ^^ Use that website for the tool.
 
 import requests
-import time
 import random
+import time
 from collections import defaultdict
 
 USER_AGENTS = [
@@ -19,72 +18,128 @@ platforms = {
     "Twitter": "https://twitter.com/{}",
     "TikTok": "https://www.tiktok.com/@{}",
     "GitHub": "https://github.com/{}",
-    "Reddit": "https://www.reddit.com/user/{}",
+    "Reddit": "https://www.reddit.com/user/{}/",
     "YouTube": "https://www.youtube.com/@{}",
     "Twitch": "https://www.twitch.tv/{}",
     "SoundCloud": "https://soundcloud.com/{}",
-    "Roblox": "https://www.roblox.com/users/profile?username={}"
+    "Roblox": "https://www.roblox.com/users/profile?username={}",
+    "Facebook": "https://www.facebook.com/{}/"
 }
 
 def check_username(username):
     found = []
     errors = []
-
-    for platform, url_template in platforms.items():
-        url = url_template.format(username)
+    for platform, url_t in platforms.items():
+        url = url_t.format(username)
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Connection": "keep-alive",
         }
-
         try:
-            res = requests.get(url, headers=headers, timeout=3, allow_redirects=True)
+            r = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+            text = r.text.lower()
 
-            if res.status_code == 200 or res.status_code in [301, 302]:
-                found.append((platform, res.url))
-            elif res.status_code in [403, 429]:
-                desc = {
-                    403: "Forbidden (maybe blocked by bot protection)",
-                    429: "Too Many Requests (rate-limited)"
-                }.get(res.status_code, f"Error {res.status_code}")
-                errors.append((platform, desc))
+            # Twitter: Check for specific error message in the response text
+            if platform == "Twitter" and "sorry, that page doesn’t exist" in text:
+                errors.append((platform, f"{username} does not exist (HTML check)"))
+                continue
 
-        except Exception as e:
-            errors.append((platform, f"Error {str(e)}"))
+            # TikTok: Check for specific error message in the response text
+            if platform == "TikTok" and "page not found" in text:
+                errors.append((platform, f"{username} does not exist (HTML check)"))
+                continue
+
+            # Twitch: Check for specific error message in the response text
+            if platform == "Twitch" and "data-a-target=\"core-error-message\"" in text:
+                errors.append((platform, f"{username} does not exist (HTML check)"))
+                continue
+
+            # Facebook: Check for 400 status code and check if page exists
+            if platform == "Facebook":
+                if r.status_code == 400 and "this page isn’t available" in text:
+                    errors.append((platform, f"{username} does not exist (HTML check)"))
+                    continue
+                elif r.status_code == 200:
+                    found.append((platform, r.url))
+                    continue
+                else:
+                    errors.append((platform, f"{username}: Unexpected status {r.status_code}"))
+                    continue
+
+            # General: Check for 404 status code
+            if r.status_code == 404:
+                errors.append((platform, f"{username} does not exist (404)"))
+                continue
+
+            # General: Check for 200 status code
+            if r.status_code == 200:
+                found.append((platform, r.url))
+                continue
+
+            # Handling Reddit-specific issues
+            if platform == "Reddit":
+                # Check for "user not found" or "page not found" text
+                if "user not found" in text or "page not found" in text:
+                    errors.append((platform, f"{username} does not exist (HTML check)"))
+                # Check for CAPTCHA or robot verification challenge
+                elif "captcha" in text or "verify you're not a robot" in text:
+                    errors.append((platform, f"{username}: CAPTCHA challenge detected"))
+                # Check for "403 Forbidden" or blocked access
+                elif "access denied" in text or "403 forbidden" in text:
+                    errors.append((platform, f"{username}: Blocked by Reddit (403 Forbidden)"))
+                else:
+                    found.append((platform, r.url))
+                continue
+
+            # General: Handle other status codes
+            errors.append((platform, f"{username}: Unexpected status {r.status_code}"))
+
+        except requests.exceptions.RequestException as e:
+            errors.append((platform, f"{username}: Error {e}"))
 
     return found, errors
+
+def wait_between_requests():
+    # Random delay between 22 and 27 seconds
+    time.sleep(random.randint(22, 27))
 
 if __name__ == "__main__":
     while True:
         try:
-            user_input = input("[ - ] Enter usernames for lookup: ").strip()
-            usernames = [u.strip() for u in user_input.split(",") if u.strip()]
+            inp = input("[ - ] Enter usernames for lookup: ").strip()
+            print("[!] This may take a while due to anti-bot and rate limiting..")
+            print("[!] Platforms such as: Twitch, X (formerly Twitter), and Reddit are experimental and can have false positives/negatives.")
+            users = [u.strip() for u in inp.split(",") if u.strip()]
 
-            found_by_platform = defaultdict(list)
-            errors_by_platform = defaultdict(list)
+            found_by_pl = defaultdict(list)
+            errs_by_pl = defaultdict(list)
 
-            for username in usernames:
-                found, errors = check_username(username)
-                for platform, url in found:
-                    found_by_platform[platform].append(f"{url}")
-                for platform, err in errors:
-                    errors_by_platform[platform].append(f"{username}: {err}")
+            for idx, u in enumerate(users):
+                fnd, err = check_username(u)
+                for p, link in fnd:
+                    found_by_pl[p].append(link)
+                for p, msg in err:
+                    errs_by_pl[p].append(f"{u}: {msg}")
 
-            for platform, urls in found_by_platform.items():
-                print(f"[+] {platform}:")
-                for url in urls:
-                    print(f"    {url}")
+                # Wait between requests if there's more than one username to check
+                if idx < len(users) - 1:
+                    wait_between_requests()
 
-            print("\n=== Errors ===")
-            for platform, errlist in errors_by_platform.items():
-                print(f"[+] {platform}:")
-                for err in errlist:
-                    print(f"    {err}")
+            print("\n[✓] Found accounts:")
+            for p, links in found_by_pl.items():
+                print(f"  [{p}]")
+                for l in links:
+                    print(f"    → {l}")
+
+            print("\n[✗] Errors / Not Found:")
+            for p, msgs in errs_by_pl.items():
+                print(f"  [{p}]")
+                for m in msgs:
+                    print(f"    → {m}")
 
             print("\n---\n")
-            time.sleep(10)
 
         except KeyboardInterrupt:
             print("\nExiting.")
