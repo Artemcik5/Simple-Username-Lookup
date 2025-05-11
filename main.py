@@ -1,3 +1,5 @@
+# https://colab.research.google.com/ 
+# ^^ that website allows for testing on google's servers.
 # again this thing sucks, go use Sherlock.
 
 import requests
